@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package attendance;
+
+// پیام رکورد حضور
+message AttendanceRecord {
+  int32 id = 1;
+  string employee_id = 2;
+  string action = 3;        // "in" یا "out"
+  string timestamp = 4;     // ISO8601 string
+}
+
+// درخواست لیست رکوردها
+message ListRequest {
+  string employee_id = 1;
+  string jwt = 2;
+}
+
+// درخواست استریم رکوردهای جدید
+message StreamRequest {
+  string jwt = 1;
+}
+
+// سرویس Attendance
+service AttendanceService {
+  // لیست رکوردهای یک کارمند
+  rpc List (ListRequest) returns (stream AttendanceRecord);
+
+  // استریم رکوردهای جدید (real-time)
+  rpc StreamNew (StreamRequest) returns (stream AttendanceRecord);
+}

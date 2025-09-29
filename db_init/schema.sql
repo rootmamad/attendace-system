@@ -1,5 +1,12 @@
 CREATE TABLE IF NOT EXISTS employees (
-  id SERIAL PRIMARY KEY,
-  username VARCHAR(64) UNIQUE NOT NULL,
-  password_hash VARCHAR(256) NOT NULL
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(64) UNIQUE NOT NULL,
+    password_hash VARCHAR(256) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS attendance (
+    id SERIAL PRIMARY KEY,
+    employee_id INT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+    action VARCHAR(10) NOT NULL CHECK (action IN ('in', 'out')),
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

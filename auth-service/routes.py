@@ -20,13 +20,14 @@ def register():
         return jsonify({"error": "username already exists"}), 409
 
     cur.execute(
-        "INSERT INTO employees (username, password_hash) VALUES (%s,%s)",
+        "INSERT INTO employees (username, password_hash) VALUES (%s,%s) RETURNING id",
         (username, generate_password_hash(password))
     )
+    emp_id = cur.fetchone()[0]
     conn.commit(); cur.close(); conn.close()
-
-    token = issue_token(username)
-    return jsonify({"message": "employee registered successfully", "token": token}), 201
+    
+    token = issue_token(emp_id,username)
+    return jsonify({"message": "employee registered successfully","employee_id": emp_id, "token": token}), 201
 
 
 @bp.post("/login")
@@ -38,14 +39,14 @@ def login():
         return jsonify({"error": "username and password required"}), 400
 
     conn = get_conn(); cur = conn.cursor()
-    cur.execute("SELECT password_hash FROM employees WHERE username=%s", (username,))
+    cur.execute("SELECT password_hash , id FROM employees WHERE username=(%s)", (username,))
     row = cur.fetchone()
     cur.close(); conn.close()
 
     if not row or not check_password_hash(row[0], password):
         return jsonify({"error": "invalid credentials"}), 401
 
-    token = issue_token(username)
+    token = issue_token(row[1],username)
     return jsonify({"token": token})
 
 

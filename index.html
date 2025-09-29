@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <title>Attendance Client</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #0f172a;       /* slate-900 */
+      --card: #111827;     /* gray-900 */
+      --text: #e5e7eb;     /* gray-200 */
+      --muted: #9ca3af;    /* gray-400 */
+      --primary: #3b82f6;  /* blue-500 */
+      --primary-dark: #2563eb; /* blue-600 */
+      --success: #22c55e;  /* green-500 */
+      --error: #ef4444;    /* red-500 */
+      --border: #1f2937;   /* gray-800 */
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(1200px circle at 50% -10%, #1f2937 10%, #0f172a 40%, #0b1322 70%);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      direction: rtl;
+    }
+    .container {
+      width: 95%;
+      max-width: 680px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, var(--card), #0b1322);
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 18px;
+    }
+    .header h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      letter-spacing: 0.3px;
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      background: rgba(17,24,39,0.6);
+      backdrop-filter: blur(6px);
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      color: #ffffff;
+    }
+    input, button {
+      width: 100%;
+      padding: 10px 12px;
+      margin: 6px 0;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0b1220;
+      color: var(--text);
+      outline: none;
+    }
+    input::placeholder { color: var(--muted); }
+    button {
+      background: var(--primary);
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    button:hover { background: var(--primary-dark); }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: #334155;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .status {
+      margin-top: 8px;
+      font-size: 13px;
+    }
+    .status.success { color: var(--success); }
+    .status.error { color: var(--error); }
+    .status.muted { color: var(--muted); }
+    .records {
+      margin-top: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      background: #0a0f1d;
+    }
+    .record {
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .record:last-child { border-bottom: none; }
+    .footer {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .chip {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #0b1220;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>سامانه ثبت حضور</h1>
+      <p class="subtitle">Login → JWT → Attendance → Live Reporter</p>
+      <div id="userChip" class="chip" style="display:none;"></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>ورود</h2>
+        <input id="username" placeholder="نام کاربری">
+        <input id="password" type="password" placeholder="رمز عبور">
+        <button id="loginBtn" onclick="login()">Login</button>
+        <p id="loginStatus" class="status muted">برای استفاده ابتدا وارد شوید.</p>
+      </div>
+
+      <div class="card">
+        <h2>ثبت حضور</h2>
+        <div class="row">
+          <button id="inBtn" onclick="mark('in')" disabled>ورود</button>
+          <button id="outBtn" onclick="mark('out')" disabled>خروج</button>
+        </div>
+        <p id="attStatus" class="status muted">در انتظار عملیات...</p>
+      </div>
+
+      <div class="card">
+        <h2>رکوردهای زنده</h2>
+        <div id="records" class="records"></div>
+        <p id="wsStatus" class="status muted">وضعیت اتصال: قطع</p>
+      </div>
+    </div>
+
+    <div class="footer">نسخهٔ سادهٔ فرانت برای تست معماری • HTML + JS خام</div>
+  </div>
+
+<script>
+let token = null;
+let currentUser = { sub: null, employee_id: null };
+let ws = null;
+let lastAction = null; 
+
+function parseJwt(t) {
+  try {
+    const parts = t.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload;
+  } catch (e) { return null; }
+}
+
+function setUserChip() {
+  const chip = document.getElementById('userChip');
+  if (currentUser.sub) {
+    chip.style.display = 'inline-block';
+    chip.textContent = `کاربر ${currentUser.sub} (ID: ${currentUser.employee_id})`;
+  } else {
+    chip.style.display = 'none';
+  }
+}
+
+async function login() {
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  const res = await fetch("http://localhost:8001/login", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      username: document.getElementById("username").value,
+      password: document.getElementById("password").value
+    })
+  }).catch(() => null);
+
+  if (!res) {
+    showStatus("loginStatus", "ارتباط با سرور برقرار نشد.", "error");
+    btn.disabled = false;
+    return;
+  }
+
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.token) {
+    token = data.token;
+    const claims = parseJwt(token) || {};
+    currentUser.sub = claims.sub;
+    currentUser.employee_id = claims.employee_id;
+    setUserChip();
+
+    showStatus("loginStatus", `✅ کاربر ${currentUser.sub} وارد شد.`, "success");
+    enableAttendanceButtons();
+    connectWS();
+  } else {
+    showStatus("loginStatus", "❌ نام کاربری یا رمز عبور اشتباه است.", "error");
+  }
+  btn.disabled = false;
+}
+
+function enableAttendanceButtons() {
+  document.getElementById('inBtn').disabled = false;
+  document.getElementById('outBtn').disabled = false;
+  lastAction = null;
+  showStatus("attStatus", "آماده برای ثبت حضور.", "muted");
+}
+
+async function mark(action) {
+  if (!token) {
+    alert("ابتدا وارد شوید!");
+    return;
+  }
+
+  if (lastAction === action) {
+    showStatus("attStatus", `⚠️ نمی‌توان دوبار پشت‌سرهم ${action === 'in' ? 'ورود' : 'خروج'} زد.`, "error");
+    return;
+  }
+
+  document.getElementById('inBtn').disabled = true;
+  document.getElementById('outBtn').disabled = true;
+
+  const res = await fetch("http://localhost:8002/attendance", {
+    method: "POST",
+    headers: {
+      "Content-Type":"application/json",
+      "Authorization":"Bearer " + token
+    },
+    body: JSON.stringify({ action }) 
+  }).catch(() => null);
+
+  if (!res) {
+    showStatus("attStatus", "ارتباط با سرویس حضور برقرار نشد.", "error");
+    document.getElementById('inBtn').disabled = false;
+    document.getElementById('outBtn').disabled = false;
+    return;
+  }
+
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    lastAction = action; 
+    const verb = action === 'in' ? 'ورود' : 'خروج';
+    showStatus("attStatus", `✅ کاربر ${currentUser.sub} ${verb} ثبت کرد (${data.timestamp}).`, "success");
+  } else {
+    const err = data.error || "خطای نامشخص";
+    showStatus("attStatus", `❌ خطا: ${err}`, "error");
+  }
+
+  document.getElementById('inBtn').disabled = (lastAction === 'in');
+  document.getElementById('outBtn').disabled = (lastAction === 'out');
+}
+
+function connectWS() {
+  if (ws) try { ws.close(); } catch {}
+  ws = new WebSocket("ws://localhost:8103/ws?token=" + token);
+
+  ws.onopen = () => showStatus("wsStatus", "وضعیت اتصال: وصل", "success");
+  ws.onclose = () => showStatus("wsStatus", "وضعیت اتصال: قطع", "error");
+  ws.onerror = () => showStatus("wsStatus", "وضعیت اتصال: خطا", "error");
+
+  ws.onmessage = (event) => {
+    const msg = safeJson(event.data);
+    const r = document.createElement("div");
+    r.className = "record";
+    const who = currentUser.sub ? `کاربر ${currentUser.sub}` : "کاربر";
+    const actFa = msg && msg.action === 'in' ? 'ورود' : (msg && msg.action === 'out' ? 'خروج' : 'عمل');
+    const stamp = (msg && msg.timestamp) ? msg.timestamp : new Date().toISOString();
+    r.textContent = `📡 ${who} ${actFa} ثبت شد • ${stamp}`;
+    document.getElementById("records").prepend(r);
+
+    if (msg && msg.action) {
+      lastAction = msg.action;
+      document.getElementById('inBtn').disabled = (lastAction === 'in');
+      document.getElementById('outBtn').disabled = (lastAction === 'out');
+    }
+  };
+}
+
+function showStatus(id, text, kind) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = `status ${kind}`;
+}
+
+function safeJson(s) {
+  try { return JSON.parse(s); } catch { return null; }
+}
+</script>
+</body>
+</html>

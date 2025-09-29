@@ -7,12 +7,7 @@ from flask import request, jsonify
 SECRET = os.getenv("JWT_SECRET", "dev-secret")
 ALG = "HS256"
 
-def issue_token(username: str, expires_in_hours: int = 1):
-    payload = {
-        "sub": username,
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=expires_in_hours)
-    }
-    return jwt.encode(payload, SECRET, algorithm=ALG)
+
 
 def verify_token(token: str) -> dict:
     return jwt.decode(token, SECRET, algorithms=[ALG])

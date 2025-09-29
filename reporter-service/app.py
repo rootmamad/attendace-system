@@ -14,27 +14,30 @@ clients = set()
 def verify_token(token: str) -> dict:
     return jwt.decode(token, SECRET, algorithms=[ALG])
 
+
+
+
+user_clients = {}  # employee_id -> set of sockets
+
 @sock.route('/ws')
 def ws(ws):
     token = ws.environ.get("QUERY_STRING", "").replace("token=", "")
-    if not token:
-        ws.close()
-        return
+    claims = verify_token(token)
+    emp_id = claims.get("employee_id")
 
-    try:
-        claims = verify_token(token)
-    except Exception:
-        ws.close()
-        return
+    if emp_id not in user_clients:
+        user_clients[emp_id] = set()
+    user_clients[emp_id].add(ws)
 
-    clients.add(ws)
     try:
         while True:
-            data = ws.receive()
-            if data is None:
+            if ws.receive() is None:
                 break
     finally:
-        clients.remove(ws)
+        user_clients[emp_id].remove(ws)
+
+
+
 
 @app.post("/hook/new-record")
 def new_record():
@@ -44,16 +47,18 @@ def new_record():
         return jsonify({"error": "unauthorized"}), 401
 
     data = request.get_json() or {}
-    dead = []
-    for c in clients:
+    emp_id = data.get("employee_id")
+
+    # فقط به کلاینت‌های همون کارمند بفرست
+    for ws in user_clients.get(emp_id, []):
         try:
-            c.send(str(data))
+            ws.send(str(data))
         except Exception:
-            dead.append(c)
-    for d in dead:
-        clients.remove(d)
+            user_clients[emp_id].remove(ws)
 
     return jsonify({"status": "ok"})
+
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8103, debug=True)

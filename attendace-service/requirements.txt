@@ -1,5 +1,0 @@
-jwt_utils
-pyjwt
-flask
-psycopg2
-grpcio

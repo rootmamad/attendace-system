@@ -1,0 +1,68 @@
+version: "3.9"
+
+services:
+  auth:
+    build: ./auth-service
+    container_name: auth_service
+    ports:
+      - "8001:8001"
+    
+    env_file:
+      - .env
+
+
+  attendance:
+    build: ./attendance-service
+    container_name: attendance_service
+    ports:
+      - "8002:8002"
+    environment:
+      - REPORTER_INTERNAL_URL=http://reporter:8103
+      - INTERNAL_HOOK_SECRET=hook-secret
+    depends_on:
+      - reporter
+    env_file:
+      - .env
+
+
+  reporter:
+    build: ./reporter-service
+    container_name: reporter_service
+    ports:
+      - "8103:8103"
+    environment:
+      - INTERNAL_HOOK_SECRET=hook-secret
+    env_file:
+      - .env
+
+
+
+  client:
+    image: python:3.13.5-slim
+    working_dir: /app
+    volumes:
+      - ./client:/app
+    command: python -m http.server 5500
+    ports:
+      - "5500:5500"
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: attendance_user
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: attendance_db
+    
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db_init:/docker-entrypoint-initdb.d
+    env_file:
+      - .env
+
+
+
+volumes:
+  db_data:

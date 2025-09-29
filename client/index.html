@@ -225,6 +225,7 @@ async function login() {
     setUserChip();
 
     showStatus("loginStatus", `✅ کاربر ${currentUser.sub} وارد شد.`, "success");
+    loadHistory(claims.employee_id);
     enableAttendanceButtons();
     connectWS();
   } else {
@@ -238,6 +239,38 @@ function enableAttendanceButtons() {
   document.getElementById('outBtn').disabled = false;
   lastAction = null;
   showStatus("attStatus", "آماده برای ثبت حضور.", "muted");
+}
+async function loadHistory(emp_id) {
+  if (!token) return;
+
+  const res = await fetch(`http://localhost:8002/attendance/${emp_id}`, {
+    headers: { "Authorization": "Bearer " + token }
+  }).catch(() => null);
+
+  if (!res) {
+    showStatus("wsStatus", "❌ خطا در دریافت تاریخچه حضور", "error");
+    return;
+  }
+
+  const data = await res.json().catch(() => []);
+  const recordsDiv = document.getElementById("records");
+  recordsDiv.innerHTML = ""; // پاک کردن قبلی
+
+  if (data.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "record";
+    empty.textContent = "هیچ رکوردی یافت نشد.";
+    recordsDiv.appendChild(empty);
+    return;
+  }
+
+  data.forEach(rec => {
+    const r = document.createElement("div");
+    r.className = "record";
+    const actFa = rec.action === 'in' ? 'ورود' : 'خروج';
+    r.textContent = `📜 کارمند ${rec.employee_id} → ${actFa} • ${rec.timestamp}`;
+    recordsDiv.appendChild(r);
+  });
 }
 
 async function mark(action) {
@@ -287,12 +320,18 @@ async function mark(action) {
 function connectWS() {
   if (ws) try { ws.close(); } catch {}
   ws = new WebSocket("ws://localhost:8103/ws?token=" + token);
-
+  console.log(token)
+  
   ws.onopen = () => showStatus("wsStatus", "وضعیت اتصال: وصل", "success");
   ws.onclose = () => showStatus("wsStatus", "وضعیت اتصال: قطع", "error");
   ws.onerror = () => showStatus("wsStatus", "وضعیت اتصال: خطا", "error");
 
   ws.onmessage = (event) => {
+    const recordsDiv = document.getElementById("records");
+  if (recordsDiv.textContent.includes("هیچ رکوردی یافت نشد")) {
+    recordsDiv.innerHTML = "";
+  }
+
     const msg = safeJson(event.data);
     const r = document.createElement("div");
     r.className = "record";

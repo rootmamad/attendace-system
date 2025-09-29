@@ -1,4 +1,6 @@
-flask
 pyjwt
+flask
 psycopg2-binary==2.9.9
+grpcio
+requests
 flask_cors

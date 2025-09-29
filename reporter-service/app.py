@@ -17,12 +17,18 @@ def verify_token(token: str) -> dict:
 
 
 
-user_clients = {}  # employee_id -> set of sockets
+user_clients = {}  
 
 @sock.route('/ws')
 def ws(ws):
     token = ws.environ.get("QUERY_STRING", "").replace("token=", "")
-    claims = verify_token(token)
+    try:
+        claims = verify_token(token)
+    except Exception as e:
+        print("JWT decode error:", e,flush=True)
+        
+        ws.close()
+        return
     emp_id = claims.get("employee_id")
 
     if emp_id not in user_clients:
@@ -49,7 +55,6 @@ def new_record():
     data = request.get_json() or {}
     emp_id = data.get("employee_id")
 
-    # فقط به کلاینت‌های همون کارمند بفرست
     for ws in user_clients.get(emp_id, []):
         try:
             ws.send(str(data))

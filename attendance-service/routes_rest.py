@@ -24,6 +24,19 @@ def create_record():
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
+    "SELECT action FROM attendance WHERE employee_id=%s ORDER BY timestamp DESC LIMIT 1",
+    (emp_id,)
+    )
+    row = cur.fetchone()
+    last_action = row[0] if row else None
+
+    if last_action == action:
+        return jsonify({"error": f"امکان ثبت {action} پشت سر هم وجود ندارد"}), 400
+
+    if last_action is None and action == "out":
+        return jsonify({"error": "اولین عملیات باید ورود باشد"}), 400
+
+    cur.execute(
         "INSERT INTO attendance (employee_id, action, timestamp) VALUES (%s,%s,%s) RETURNING id",
         (emp_id, action, ts_dt)
     )
@@ -62,9 +75,16 @@ def list_records(employee_id):
     conn = get_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute(
-        "SELECT id, employee_id, action, timestamp FROM attendance WHERE employee_id=%s ORDER BY timestamp DESC",
+        """
+        SELECT id, employee_id, action, timestamp
+        FROM attendance
+        WHERE employee_id=%s
+          AND DATE(timestamp) = CURRENT_DATE
+        ORDER BY timestamp DESC
+        """,
         (employee_id,)
     )
+
     rows = [dict(r) for r in cur.fetchall()]
     cur.close(); conn.close()
     rows = [{**r, "timestamp": r["timestamp"].isoformat()} for r in rows]
